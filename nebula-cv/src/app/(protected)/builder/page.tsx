@@ -56,8 +56,8 @@ export default async function BuilderPageServer() {
 
   if (resumesData && resumesData.length > 0) {
     // Set the latest resume as the initial one
-    initialResume = resumesData[0] as DbResumeRow;
-    
+    initialResume = resumesData[0] as unknown as DbResumeRow;
+
     // Populate the summary list for the dropdown
     resumesData.forEach((row: any) => {
       resumesList.push({
