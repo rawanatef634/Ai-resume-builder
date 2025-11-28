@@ -1,0 +1,141 @@
+/* src/app/globals.css */
+@import "tailwindcss";
+
+/* Theme tokens */
+:root {
+  --nebulaBg: #05060a;
+  --nebulaSurface: #070818;
+  --nebulaCard: #0c1022;
+  --nebulaCyan: #00e5ff;
+  --nebulaText: #f9fafb;
+}
+
+@theme inline {
+  --color-background: var(--nebulaBg);
+  --color-foreground: var(--nebulaText);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--nebulaBg);
+    --foreground: var(--nebulaText);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: radial-gradient(
+    circle at top,
+    #111827 0,
+    #020617 45%,
+    #000000 100%
+  );
+  color: var(--nebulaText);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+a {
+  text-decoration: none;
+}
+
+/* Remove spinners from number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ============================================
+   CRITICAL: Print styles for full A4 PDF
+   ============================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  /* Only print the resume preview */
+  [data-print-resume],
+  [data-print-resume] * {
+    visibility: visible;
+  }
+
+  [data-print-resume] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 15mm 20mm !important;
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Ensure text is crisp and black */
+  [data-print-resume] * {
+    background: transparent !important;
+    color: #000000 !important;
+  }
+
+  /* Keep structural borders */
+  [data-print-resume] header {
+    border-bottom: 2px solid #1f2937 !important;
+  }
+
+  [data-print-resume] section {
+    border-top: 2px solid #d1d5db !important;
+  }
+
+  /* Hide any UI elements that shouldn't print */
+  /* header,
+  footer,
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  } */
+}
