@@ -36,6 +36,7 @@ const page = () => {
                 "A few job analyses per month",
                 "Arabic → English support",
                 "PDF export (ATS-friendly)",
+                "1 cover letter"
               ].map((item, i) => (
                 <li
                   key={i}
@@ -68,7 +69,7 @@ const page = () => {
             </p>
             <div className="mt-6 flex items-baseline gap-2">
               <span className="text-5xl font-bold text-white">
-                $12
+                $5
               </span>
               <span className="text-sm text-slate-200">
                 /month

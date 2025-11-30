@@ -20,40 +20,36 @@ export default function LoginContent() {
 
   const redirectTo = searchParams.get("redirectTo") || "/builder";
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!email || !password) return;
+ // inside src/app/login/page.tsx handleSubmit
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError(null);
+  if (!email || !password) return;
 
-    setLoading(true);
-    try {
+  setLoading(true);
+  try {
     if (mode === "login") {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  console.log("LOGIN RESULT", data, error);
-  if (error) throw error;
-} else {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
-  console.log("SIGNUP RESULT", data, error);
-  if (error) throw error;
-}
-
-
-      // Logged in -> go to builder and refresh
+      const res = await supabase.auth.signInWithPassword({ email, password });
+      console.log("signInWithPassword response:", res);
+      if (res.error) throw res.error;
+      // success: navigate
       router.push(redirectTo);
-      router.refresh();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+      // don't force refresh immediately — let onAuthStateChange update UI
+    } else {
+      const res = await supabase.auth.signUp({ email, password });
+      console.log("signUp response:", res);
+      if (res.error) throw res.error;
+      // After signup, Supabase may require email confirmation depending on settings.
+      router.push(redirectTo);
     }
-  };
+  } catch (err: any) {
+    console.error("auth error:", err);
+    setError(err.message || "Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-4">

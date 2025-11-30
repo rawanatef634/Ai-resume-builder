@@ -1,11 +1,7 @@
 // src/components/ResumePreview.tsx
 "use client";
 
-import React, {
-  forwardRef,
-  useEffect,
-  useState,
-} from "react";
+import React, { forwardRef, useEffect, useRef, useState } from "react";
 import type { ResumeHeader } from "./ResumeHeaderForm";
 
 interface EducationItem {
@@ -29,443 +25,463 @@ type ImprovingState =
   | { section: "summary"; mode: string }
   | { section: "experience"; index: number; mode: string };
 
-// A4-like page style, white background, black text
-export const ResumePreview = forwardRef<
-  HTMLDivElement,
-  ResumePreviewProps
->(({ resumeJson, header, templateId, onChangeResumeJson }, ref) => {
-  const [localResume, setLocalResume] = useState<any | null>(
-    resumeJson,
-  );
-  const [improving, setImproving] =
-    useState<ImprovingState>(null);
+export const ResumePreview = forwardRef<HTMLDivElement, ResumePreviewProps>(
+  ({ resumeJson, header, templateId, onChangeResumeJson }, ref) => {
+    const [localResume, setLocalResume] = useState<any | null>(resumeJson);
+    const [improving, setImproving] = useState<ImprovingState>(null);
+    const innerRef = useRef<HTMLDivElement | null>(null);
 
-  // keep local state in sync when parent changes resumeJson
-  useEffect(() => {
-    setLocalResume(resumeJson);
-  }, [resumeJson]);
+    // --- ADDED: refs + helpers for auto-resizing textareas (summary + bullets)
+    const summaryRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const summary: string = localResume?.summary || "";
-  const skills: string[] = localResume?.skills || [];
-  const experiences: any[] = localResume?.experiences || [];
-  const projects: any[] = localResume?.projects || [];
-  const education: EducationItem[] = localResume?.education || [];
+    const autoResize = (el?: HTMLTextAreaElement | null) => {
+      if (!el) return;
+      el.style.height = "auto";
+      // add a couple pixels to avoid a hairline scrollbar in some browsers
+      el.style.height = `${Math.max(el.scrollHeight + 2, 20)}px`;
+    };
 
-  const isEmpty =
-    !header.fullName &&
-    !summary &&
-    experiences.length === 0 &&
-    !localResume;
+    useEffect(() => {
+      // resize summary on mount and when resumeJson changes
+      autoResize(summaryRef.current);
+    }, [localResume?.summary, resumeJson]);
+    // --- END ADDED
 
-  const commitUpdate = (updated: any) => {
-    setLocalResume(updated);
-    onChangeResumeJson?.(updated);
-  };
+    useEffect(() => {
+      setLocalResume(resumeJson);
+    }, [resumeJson]);
 
-  // === AI IMPROVEMENT CALLS ===
-  const improveSummary = async (mode: string) => {
-    if (!localResume?.summary) return;
-    setImproving({ section: "summary", mode });
-    try {
-      const res = await fetch("/api/improve-section", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          section: "summary",
-          mode,
-          summary: localResume.summary,
-        }),
-      });
-      const data = await res.json();
-      if (data.summary) {
-        const updated = {
-          ...localResume,
-          summary: data.summary,
-        };
-        commitUpdate(updated);
+    const skills: string[] = localResume?.skills || [];
+    const experiences: any[] = localResume?.experiences || [];
+    const projects: any[] = localResume?.projects || [];
+    const education: EducationItem[] = localResume?.education || [];
+    const summary: string = localResume?.summary || "";
+
+    const isEmpty =
+      !header.fullName &&
+      experiences.length === 0 &&
+      projects.length === 0 &&
+      education.length === 0 &&
+      !localResume;
+
+    const commitUpdate = (updated: any) => {
+      setLocalResume(updated);
+      onChangeResumeJson?.(updated);
+    };
+
+    const improveExperience = async (index: number, mode: string) => {
+      if (!localResume?.experiences?.[index]) return;
+      const exp = localResume.experiences[index];
+      setImproving({ section: "experience", index, mode });
+
+      try {
+        const res = await fetch("/api/improve-section", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "experience",
+            mode,
+            experience: exp,
+          }),
+        });
+        const data = await res.json();
+        if (Array.isArray(data.bullets)) {
+          const newExperiences = [...localResume.experiences];
+          newExperiences[index] = {
+            ...newExperiences[index],
+            bullets: data.bullets,
+          };
+          const updated = {
+            ...localResume,
+            experiences: newExperiences,
+          };
+          commitUpdate(updated);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setImproving(null);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setImproving(null);
-    }
-  };
+    };
 
-  const improveExperience = async (
-    index: number,
-    mode: string,
-  ) => {
-    if (!localResume?.experiences?.[index]) return;
-    const exp = localResume.experiences[index];
-    setImproving({ section: "experience", index, mode });
+    const improveSummary = async (mode: string) => {
+      if (!localResume) return;
+      setImproving({ section: "summary", mode });
 
-    try {
-      const res = await fetch("/api/improve-section", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          section: "experience",
-          mode,
-          experience: exp,
-        }),
-      });
-      const data = await res.json();
-      if (Array.isArray(data.bullets)) {
-        const newExperiences = [...localResume.experiences];
-        newExperiences[index] = {
-          ...newExperiences[index],
-          bullets: data.bullets,
-        };
-        const updated = {
-          ...localResume,
-          experiences: newExperiences,
-        };
-        commitUpdate(updated);
+      try {
+        const res = await fetch("/api/improve-section", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "summary",
+            mode,
+            summary: localResume.summary || "",
+          }),
+        });
+        const data = await res.json();
+        if (typeof data.summary === "string") {
+          const updated = { ...localResume, summary: data.summary };
+          commitUpdate(updated);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setImproving(null);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setImproving(null);
-    }
-  };
+    };
 
-  // === RENDER ===
-  return (
-    <div className="flex h-[800px] items-start justify-center overflow-y-auto">
-      <div
-        ref={ref}
-        data-print-resume
-        className="w-full max-w-[850px] border border-gray-300 bg-white px-10 py-8 text-black shadow-2xl"
-        style={{
-          minHeight: "297mm", // A4 height
-          maxWidth: "210mm", // A4 width
-          fontSize: templateId === "compact" ? "11px" : "12px",
-          lineHeight: templateId === "compact" ? 1.35 : 1.45,
-        }}
-      >
-        {isEmpty ? (
-          <div className="flex min-h-[800px] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-5xl">📝</div>
-              <p className="text-lg font-semibold text-gray-600">
-                Your resume will appear here
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                Answer the questions on the left or import your existing resume to
-                start editing.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* HEADER */}
-            <header className="border-b-2 border-gray-800 pb-4 text-center">
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-                {header.fullName || "Your Name"}
-              </h1>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-gray-700">
-                {header.title || "Frontend Developer"}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-gray-700">
-                {header.location && <span>{header.location}</span>}
-                {header.email && (
-                  <>
-                    {header.location && <span>•</span>}
-                    <span>{header.email}</span>
-                  </>
-                )}
-                {header.phone && (
-                  <>
-                    {(header.location || header.email) && <span>•</span>}
-                    <span>{header.phone}</span>
-                  </>
-                )}
-                {header.linkedin && (
-                  <>
-                    {(header.location ||
-                      header.email ||
-                      header.phone) && <span>•</span>}
-                    <span>{header.linkedin}</span>
-                  </>
-                )}
-                {header.github && (
-                  <>
-                    {(header.location ||
-                      header.email ||
-                      header.phone ||
-                      header.linkedin) && <span>•</span>}
-                    <span>{header.github}</span>
-                  </>
-                )}
+    const computeRows = (text: string | undefined) => {
+      if (!text) return 1;
+      const lines = text.split("\n").length;
+      return Math.min(Math.max(lines, 1), 8);
+    };
+
+    useEffect(() => {
+      if (!ref) return;
+      if (typeof ref === "function") {
+        ref(innerRef.current);
+      } else if (ref && "current" in ref) {
+        // @ts-ignore
+        ref.current = innerRef.current;
+      }
+    }, [ref]);
+
+    return (
+      <div className="flex w-full justify-center">
+        <style>{`
+          @page { size: A4; margin: 0; }
+          @media print {
+            html, body { height: 100%; }
+            [data-print-resume] {
+              width: 210mm !important;
+              height: 297mm !important;
+              padding: 18mm !important;
+              box-sizing: border-box !important;
+            }
+          }
+
+          [data-print-resume] p,
+          [data-print-resume] li {
+            text-align: justify;
+            text-justify: inter-word;
+            hyphens: auto;
+          }
+        `}</style>
+
+        <div
+          ref={innerRef}
+          data-print-resume
+          className="bg-white text-black"
+          style={{
+            width: "210mm",
+            maxWidth: "100%",
+            padding: "10mm",
+            fontFamily: "'Times New Roman', Times, serif",
+            fontSize: "11pt",
+            lineHeight: 1.15,
+            boxShadow: "0 8px 20px rgba(2,6,23,0.15)",
+          }}
+        >
+          {isEmpty ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <div className="text-center">
+                <div className="mb-4 text-5xl">📝</div>
+                <p className="text-lg font-semibold text-gray-600">
+                  Your resume will appear here
+                </p>
+                <p className="mt-2 text-sm text-gray-500">
+                  Answer the questions on the left or import your existing resume to start editing.
+                </p>
               </div>
-            </header>
+            </div>
+          ) : (
+            <>
+              {/* Header */}
+              <header className="mb-2 text-center">
+                <h1 style={{ fontSize: "20pt", fontWeight: 700 }}>
+                  {header.fullName || "Your Name"}
+                </h1>
+                <div
+                  className="mt-1 flex flex-wrap items-center justify-center gap-1.5"
+                  style={{ fontSize: "10pt", color: "#374151" }}
+                >
+                  {header.phone && <span>{header.phone}</span>}
+                  {header.email && (
+                    <>
+                      {header.phone && <span>|</span>}
+                      <span>{header.email}</span>
+                    </>
+                  )}
+                  {header.linkedin && (
+                    <>
+                      {(header.phone || header.email) && <span>|</span>}
+                      <span>{header.linkedin}</span>
+                    </>
+                  )}
+                  {header.github && (
+                    <>
+                      {(header.phone || header.email || header.linkedin) && <span>|</span>}
+                      <span>{header.github}</span>
+                    </>
+                  )}
+                </div>
+              </header>
 
-            <main className="mt-4 space-y-4">
-              {/* SUMMARY */}
-              {summary && (
-                <Section>
-                  <div className="flex items-center justify-between gap-2">
-                    <SectionTitle>Professional Summary</SectionTitle>
-                    <SectionAiControls
-                      disabled={!!improving}
-                      isLoading={
-                        improving?.section === "summary"
-                      }
-                      onImprove={() =>
-                        improveSummary("improve")
-                      }
-                      onConcise={() =>
-                        improveSummary("concise")
-                      }
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                {/* SUMMARY */}
+                <section>
+                  <h2 className="mb-1.5 border-b border-black pb-0.5 uppercase">
+                    Summary
+                  </h2>
+
                   <textarea
-                    className="mt-1 w-full resize-none border-none bg-transparent p-0 text-[12px] leading-relaxed text-gray-900 focus:outline-none focus:ring-0"
-                    rows={templateId === "compact" ? 3 : 4}
+                    ref={summaryRef} // --- ADDED: ref so we can auto-resize
+                    className="w-full resize-none border-none bg-transparent p-0 leading-tight"
+                    style={{ fontSize: "11pt", overflow: "hidden" }} // --- ADDED: hide textarea scrollbar
+                    // rows={computeRows(summary)}
                     value={summary}
                     onChange={(e) => {
-                      const updated = {
-                        ...localResume,
-                        summary: e.target.value,
-                      };
+                      const updated = { ...localResume, summary: e.target.value };
                       setLocalResume(updated);
                     }}
-                    onBlur={() => {
-                      if (!localResume) return;
-                      commitUpdate(localResume);
-                    }}
+                    onInput={(e) => autoResize(e.currentTarget as HTMLTextAreaElement)} // --- ADDED: resize while typing
+                    onBlur={() => commitUpdate(localResume)}
                   />
-                  <p className="mt-1 text-[10px] text-gray-400">
-                    Click to edit. Keep it 3–4 lines and focused on impact.
-                  </p>
-                </Section>
-              )}
 
-              {/* EDUCATION */}
-              {education && education.length > 0 && (
-                <Section>
-                  <SectionTitle>Education</SectionTitle>
-                  <div className="mt-1 space-y-1.5">
-                    {education.map(
-                      (edu: EducationItem, idx: number) => (
+                  {/* <div className="flex justify-end">
+                    <SectionAiControls
+                      disabled={!!improving}
+                      isLoading={improving?.section === "summary"}
+                      onImprove={() => improveSummary("improve")}
+                      onConcise={() => improveSummary("concise")}
+                    />
+                  </div> */}
+                </section> 
+
+                {/* EDUCATION */}
+                {education.length > 0 && (
+                  <section>
+                    <h2 className="mb-1.5 border-b border-black uppercase">
+                      Education
+                    </h2>
+                    <div className="space-y-1.5">
+                      {education.map((edu, idx) => (
                         <div key={idx}>
                           <div className="flex justify-between">
-                            <span className="font-semibold text-gray-900">
-                              {edu.institution}
-                            </span>
-                            {edu.period && (
-                              <span className="text-[11px] text-gray-700">
-                                {edu.period}
-                              </span>
-                            )}
+                            <span className="font-bold">{edu.institution}</span>
+                            {edu.location && <span>{edu.location}</span>}
                           </div>
-                          <div className="flex justify-between text-[11px] text-gray-800">
+                          <div className="flex justify-between italic">
                             <span>{edu.degree}</span>
-                            {edu.location && (
-                              <span>{edu.location}</span>
-                            )}
+                            {edu.period && <span>{edu.period}</span>}
                           </div>
                         </div>
-                      ),
-                    )}
-                  </div>
-                </Section>
-              )}
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-              {/* EXPERIENCE */}
-              {experiences && experiences.length > 0 && (
-                <Section>
-                  <div className="flex items-center justify-between gap-2">
-                    <SectionTitle>Experience</SectionTitle>
-                    <span className="text-[10px] text-gray-400">
-                      Edit bullets or use AI to tighten them.
-                    </span>
-                  </div>
-                  <div className="mt-1 space-y-2.5">
-                    {experiences.map(
-                      (exp: any, idx: number) => (
+                {/* EXPERIENCE */}
+                {experiences.length > 0 && (
+                  <section>
+                    <h2 className="mb-1.5 border-b border-black pb-0.5 uppercase">
+                      Experience
+                    </h2>
+
+                    <div className="space-y-2">
+                      {experiences.map((exp, idx) => (
                         <div key={idx}>
                           <div className="flex justify-between">
-                            <span className="font-semibold text-gray-900">
-                              {exp.title}
-                            </span>
-                            <span className="text-[11px] text-gray-700">
+                            <span className="font-bold">{exp.title}</span>
+                            <span
+                              style={{
+                                minWidth: 80,
+                                textAlign: "right",
+                                color: "#4a5568",
+                              }}
+                            >
                               {exp.period}
                             </span>
                           </div>
-                          <div className="flex justify-between text-[11px] text-gray-800">
+
+                          <div className="flex justify-between italic">
                             <span>{exp.company}</span>
-                            {exp.location && (
-                              <span>{exp.location}</span>
-                            )}
+                            {exp.location && <span>{exp.location}</span>}
                           </div>
 
-                          <div className="mt-1 flex items-center justify-between">
-                            <span className="text-[10px] text-gray-400">
-                              Bullets
-                            </span>
+                          {/* BULLETS WITH INLINE TEXTAREA */}
+                          {exp.bullets && (
+                            <ul className="ml-5 list-disc">
+                              {exp.bullets.map((b: any, i: any) => (
+                                <li key={i} style={{ marginBottom: 2 }}>
+                                  <textarea
+                                    className="w-full h-full resize-none border-none bg-transparent p-0 leading-tight"
+                                    style={{
+                                      fontSize: "11pt",
+                                      display: "inline-block",
+                                      verticalAlign: "top",
+                                      overflow: "hidden", 
+                                    }}
+                                    // rows={computeRows(b)}
+                                    value={b}
+                                    onChange={(e) => {
+                                      const newExps = [...experiences];
+                                      const newBullets = [...newExps[idx].bullets];
+                                      newBullets[i] = e.target.value;
+                                      newExps[idx] = {
+                                        ...newExps[idx],
+                                        bullets: newBullets,
+                                      };
+                                      const updated = {
+                                        ...localResume,
+                                        experiences: newExps,
+                                      };
+                                      setLocalResume(updated);
+                                    }}
+                                    onInput={(e) => autoResize(e.currentTarget as HTMLTextAreaElement)} 
+                                    onBlur={() => commitUpdate(localResume)}
+                                  />
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          {/* <div className="mt-1 flex justify-end">
                             <SectionAiControls
                               small
                               disabled={!!improving}
                               isLoading={
-                                improving?.section ===
-                                  "experience" &&
+                                improving?.section === "experience" &&
                                 improving?.index === idx
                               }
-                              onImprove={() =>
-                                improveExperience(
-                                  idx,
-                                  "improve",
-                                )
-                              }
-                              onConcise={() =>
-                                improveExperience(
-                                  idx,
-                                  "concise",
-                                )
-                              }
+                              onImprove={() => improveExperience(idx, "improve")}
+                              onConcise={() => improveExperience(idx, "concise")}
                             />
-                          </div>
-
-                          {exp.bullets &&
-                            exp.bullets.length > 0 && (
-                              <ul className="mt-1 list-disc pl-4 text-[11px] text-gray-900">
-                                {exp.bullets.map(
-                                  (
-                                    b: string,
-                                    i: number,
-                                  ) => (
-                                    <li
-                                      key={i}
-                                      className="mb-1"
-                                    >
-                                      <textarea
-                                        className="w-full resize-none border-none bg-transparent p-0 text-[11px] leading-relaxed text-gray-900 focus:outline-none focus:ring-0"
-                                        rows={
-                                          templateId ===
-                                          "compact"
-                                            ? 1
-                                            : 2
-                                        }
-                                        value={b}
-                                        onChange={(e) => {
-                                          const newExps =
-                                            [
-                                              ...experiences,
-                                            ];
-                                          const newBullets =
-                                            [
-                                              ...newExps[
-                                                idx
-                                              ].bullets,
-                                            ];
-                                          newBullets[i] =
-                                            e.target.value;
-                                          newExps[idx] = {
-                                            ...newExps[idx],
-                                            bullets:
-                                              newBullets,
-                                          };
-                                          const updated =
-                                            {
-                                              ...localResume,
-                                              experiences:
-                                                newExps,
-                                            };
-                                          setLocalResume(
-                                            updated,
-                                          );
-                                        }}
-                                        onBlur={() => {
-                                          if (
-                                            !localResume
-                                          )
-                                            return;
-                                          commitUpdate(
-                                            localResume,
-                                          );
-                                        }}
-                                      />
-                                    </li>
-                                  ),
-                                )}
-                              </ul>
-                            )}
+                          </div> */}
                         </div>
-                      ),
-                    )}
-                  </div>
-                </Section>
-              )}
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-              {/* PROJECTS */}
-              {projects && projects.length > 0 && (
-                <Section>
-                  <SectionTitle>Projects</SectionTitle>
-                  <div className="mt-1 space-y-1.5">
-                    {projects.map(
-                      (p: any, idx: number) => (
+                {/* PROJECTS */}
+                {projects.length > 0 && (
+                  <section>
+                    <h2 className="mb-1.5 border-b border-black pb-0.5 uppercase">
+                      Projects
+                    </h2>
+                    <div className="space-y-2">
+                      {projects.map((p, idx) => (
                         <div key={idx}>
-                          <div className="font-semibold text-gray-900">
-                            {p.name}
+                          <div className="flex justify-between">
+                            <span className="font-bold">
+                              {p.name}
+                              {p.stack?.length > 0 &&
+                                " | " + p.stack.join(", ")}
+                            </span>
+                            {p.period && <span>{p.period}</span>}
                           </div>
-                          <p className="text-[11px] text-gray-900">
-                            {p.description}
-                          </p>
-                          {p.stack && (
-                            <p className="text-[11px] text-gray-700">
-                              {p.stack.join(" · ")}
-                            </p>
+
+                          {p.bullets && (
+                            <ul className="ml-5 list-disc">
+                              {p.bullets.map((bullet, i) => (
+                                <li key={i}>{bullet}</li>
+                              ))}
+                            </ul>
                           )}
                         </div>
-                      ),
-                    )}
-                  </div>
-                </Section>
-              )}
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-              {/* SKILLS */}
-              {skills && skills.length > 0 && (
-                <Section>
-                  <SectionTitle>Technical Skills</SectionTitle>
-                  <p className="mt-1 text-[11px] text-gray-900">
-                    {skills.join(" · ")}
-                  </p>
-                </Section>
-              )}
-            </main>
-          </>
-        )}
+                {/* SKILLS */}
+                {skills.length > 0 && (
+                  <section>
+                    <h2 className="mb-1.5 border-b border-black pb-0.5 uppercase">
+                      Technical Skills
+                    </h2>
+                    <div>
+                      <div>
+                        <span className="font-bold">Languages: </span>
+                        <span>
+                          {skills
+                            .filter((s) =>
+                              [
+                                "Java",
+                                "Python",
+                                "C/C++",
+                                "SQL",
+                                "JavaScript",
+                                "HTML/CSS",
+                                "R",
+                                "TypeScript",
+                              ].some((lang) =>
+                                s.toLowerCase().includes(lang.toLowerCase())
+                              )
+                            )
+                            .join(", ") ||
+                            "Java, Python, C/C++, SQL, JavaScript, HTML/CSS, R, TypeScript"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="font-bold">Frameworks: </span>
+                        <span>
+                          {skills
+                            .filter((s) =>
+                              [
+                                "React",
+                                "Node",
+                                "Flask",
+                                "JUnit",
+                                "WordPress",
+                                "Material-UI",
+                                "FastAPI",
+                                "Next",
+                                "Vue",
+                                "Angular",
+                              ].some((fw) =>
+                                s.toLowerCase().includes(fw.toLowerCase())
+                              )
+                            )
+                            .join(", ") || "React, Node.js, Flask, Next.js"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="font-bold">Tools: </span>
+                        <span>
+                          {skills
+                            .filter((s) =>
+                              [
+                                "Git",
+                                "Docker",
+                                "Travis",
+                                "Google Cloud",
+                                "VS Code",
+                                "AWS",
+                                "Kubernetes",
+                              ].some((tool) =>
+                                s.toLowerCase().includes(tool.toLowerCase())
+                              )
+                            )
+                            .join(", ") || "Git, Docker, AWS, GCP"}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 ResumePreview.displayName = "ResumePreview";
-
-function Section({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border-t-2 border-gray-300 pt-3">
-      {children}
-    </section>
-  );
-}
-
-function SectionTitle({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600">
-      {children}
-    </h3>
-  );
-}
 
 interface SectionAiControlsProps {
   disabled?: boolean;
@@ -484,13 +500,11 @@ function SectionAiControls({
 }: SectionAiControlsProps) {
   const base =
     "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium";
+
   if (isLoading) {
-    return (
-      <span className="text-[10px] text-cyan-700">
-        Improving…
-      </span>
-    );
+    return <span className="text-[10px] text-cyan-700">Improving…</span>;
   }
+
   return (
     <div className="flex items-center gap-1">
       <button
@@ -501,6 +515,7 @@ function SectionAiControls({
       >
         ✨ {small ? "Improve" : "Improve with AI"}
       </button>
+
       {!small && (
         <button
           type="button"

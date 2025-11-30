@@ -24,54 +24,61 @@ export function JobLinkForm({
   const [jobUrlOrText, setJobUrlOrText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleAnalyze = async () => {
-    if (!resumeJson || !jobUrlOrText.trim() || loading) return;
-    setLoading(true);
-    setError(null);
 
-    try {
-      const res = await fetch("/api/tailor-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resumeJson,
-          jobInput: jobUrlOrText.trim(),
-        }),
-      });
+const handleAnalyze = async () => {
+  setErrorMessage(null);
+  if (!resumeJson || !jobUrlOrText.trim() || loading) return;
+  setLoading(true);
+  try {
+    const res = await fetch("/api/tailor-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resumeJson,
+        jobInput: jobUrlOrText.trim(),
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (!res.ok) {
-        if (res.status === 429 || data?.error === "RATE_LIMIT") {
-          setError(
-            "You’ve reached the AI rate limit for now. Wait a bit and then try tailoring again.",
-          );
-        } else {
-          setError(
-            data?.message ||
-              "Something went wrong while tailoring. Please try again.",
-          );
-        }
-        return;
+    if (!res.ok) {
+      // Rate limit
+      if (res.status === 429 || data?.error === "RATE_LIMIT") {
+        setErrorMessage("Rate limit reached — try again in a moment.");
+      } else if (data?.message) {
+        setErrorMessage(data.message);
+      } else {
+        setErrorMessage("Failed to analyze the job. Try again later.");
       }
-
-      onTailoredResume(
-        data.tailoredResumeJson,
-        data.atsScore,
-        data.missingSkills ?? [],
-        data.presentKeywords ?? [],
-        data.missingKeywords ?? [],
-        data.jobTitle ?? null,
-        data.jobCompany ?? null,
-      );
-    } catch (err) {
-      console.error(err);
-      setError("Network error while contacting the AI. Please try again.");
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    // Validate server response
+    if (!data || !data.tailoredResumeJson) {
+      setErrorMessage("Unexpected response from server. Please try again.");
+      console.error("tailor-resume returned:", data);
+      return;
+    }
+
+    // Apply changes
+    onTailoredResume(
+      data.tailoredResumeJson,
+      data.atsScore ?? null,
+      data.missingSkills ?? [],
+      data.presentKeywords ?? [],
+      data.missingKeywords ?? [],
+      data.jobTitle ?? undefined,
+      data.jobCompany ?? undefined,
+    );
+  } catch (err) {
+    console.error("JobLinkForm analyze error:", err);
+    setErrorMessage("Network or server error — please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-900/50 p-6 backdrop-blur-sm">
@@ -99,6 +106,11 @@ export function JobLinkForm({
       >
         {loading ? "Analyzing…" : "Analyze & Tailor Resume"}
       </button>
+              {/* after the analyze button */}
+        {errorMessage && (
+          <p className="mt-3 text-sm text-rose-300">{errorMessage}</p>
+        )}
+
 
       {!resumeJson && (
         <p className="text-sm text-amber-300/90">
